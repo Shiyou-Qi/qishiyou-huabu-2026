@@ -226,6 +226,13 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
   const connectedPrompt = useConnectedPrompt(id)
   const effectivePrompt = connectedPrompt ? connectedPrompt.text : prompt
   const promptRef = useRef<HTMLDivElement>(null)
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const mentionDropRef = useRef<HTMLDivElement>(null)
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionStart, setMentionStart] = useState(0)
+  const [mentionItems, setMentionItems] = useState<Array<{ id: string; label: string; url: string; type: 'image' | 'video' }>>([])
+  const [mentionIndex, setMentionIndex] = useState(0)
   // ── 模型列表（从后端动态获取）
   const { models: videoModels } = useModels({ type: 'video' })
   const [selectedModel, setSelectedModel] = useState<string>('')
@@ -266,6 +273,66 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
       setIsOptimizing(false)
     }
   }
+
+  // ── @素材引用：收集已连接参考、检测输入、选中插入 ─────────────────────────
+  const getConnectedRefs = useCallback(() => {
+    const state = useFlowStore.getState()
+    return state.edges
+      .filter((e) => e.target === id && e.targetHandle === TAB_HANDLES.ref)
+      .map((e) => {
+        const src = state.nodes.find((n) => n.id === e.source)
+        if (!src) return null
+        const d = src.data as CustomNodeData
+        const url = (d.imageUrl || d.videoUrl) as string | undefined
+        if (!url) return null
+        return { id: src.id, label: d.label, url, type: d.imageUrl ? 'image' as const : 'video' as const }
+      })
+      .filter(Boolean) as Array<{ id: string; label: string; url: string; type: 'image' | 'video' }>
+  }, [id])
+
+  const detectMention = useCallback((value: string, cursorPos: number) => {
+    const textBefore = value.slice(0, cursorPos)
+    const atIdx = textBefore.lastIndexOf('@')
+    if (atIdx < 0) { setMentionOpen(false); return }
+    const query = textBefore.slice(atIdx + 1)
+    if (query.includes('\n')) { setMentionOpen(false); return }
+    const refs = getConnectedRefs()
+    if (!refs.length) { setMentionOpen(false); return }
+    if (refs.some(r => r.label === query)) { setMentionOpen(false); return }
+    const filtered = query === '' ? refs : refs.filter(r => r.label.includes(query))
+    if (!filtered.length) { setMentionOpen(false); return }
+    setMentionOpen(true)
+    setMentionQuery(query)
+    setMentionStart(atIdx)
+    setMentionItems(filtered)
+    setMentionIndex(0)
+  }, [getConnectedRefs])
+
+  const handleMentionSelect = useCallback((item: { label: string }) => {
+    const textarea = promptTextareaRef.current
+    if (!textarea) return
+    const before = prompt.slice(0, mentionStart)
+    const after = prompt.slice(mentionStart + 1 + mentionQuery.length)
+    const insertion = `@${item.label} `
+    setPrompt(before + insertion + after)
+    setMentionOpen(false)
+    const newPos = mentionStart + insertion.length
+    requestAnimationFrame(() => {
+      textarea.selectionStart = textarea.selectionEnd = newPos
+      textarea.focus()
+    })
+  }, [prompt, mentionStart, mentionQuery])
+
+  useEffect(() => {
+    if (!mentionOpen) return
+    const textarea = promptTextareaRef.current
+    const drop = mentionDropRef.current
+    if (!textarea || !drop) return
+    const r = textarea.getBoundingClientRect()
+    drop.style.top = `${r.bottom + 4}px`
+    drop.style.left = `${r.left}px`
+    drop.style.minWidth = `${r.width}px`
+  }, [mentionOpen, mentionItems])
 
   // ── 测量 wrapper + 4 个 tab 按钮的真实位置，动态算每个端口的 top%
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -449,6 +516,13 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
         '1:1': '1:1', '3:4': '3:4', '9:16': '9:16', 'auto': '16:9',
       }
 
+      // 收集全能参考模式的 @素材引用
+      const connectedRefs = getConnectedRefs()
+      const references = connectedRefs.length > 0 && effectivePrompt.includes('@')
+        ? connectedRefs.filter(r => effectivePrompt.includes(`@${r.label}`))
+            .map(r => ({ label: r.label, url: r.url, type: r.type }))
+        : undefined
+
       // POST 提交异步任务
       const submitRes = await fetch('/api/generate/video', {
         method: 'POST',
@@ -460,6 +534,7 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
           resolution: resolution === '720p' ? '720p' : resolution,
           firstFrameImage,
           lastFrameImage,
+          references,
         }),
       })
       if (!submitRes.ok) {
@@ -691,13 +766,25 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
         )}
         <div className="relative">
           <textarea
+            ref={promptTextareaRef}
             value={connectedPrompt ? connectedPrompt.text : prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(e.target.value)
+              if (!connectedPrompt) detectMention(e.target.value, e.target.selectionStart)
+            }}
             onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (mentionOpen && mentionItems.length > 0) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionItems.length - 1)) }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)) }
+                else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); handleMentionSelect(mentionItems[mentionIndex]) }
+                else if (e.key === 'Escape') { e.preventDefault(); setMentionOpen(false) }
+              }
+            }}
             onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px' }}
             disabled={!!connectedPrompt}
-            placeholder="描述你想生成的画面，或从左侧连接文本/提示词助手节点…"
+            placeholder="描述你想生成的画面，输入 @ 引用已连接的参考素材…"
             rows={4}
             title={connectedPrompt ? '外部提示词已接入，本地输入已锁定' : undefined}
             className={cn(
@@ -722,6 +809,34 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
             </button>
           )}
         </div>
+        {/* @mention dropdown */}
+        {mentionOpen && mentionItems.length > 0 && createPortal(
+          <div
+            ref={mentionDropRef}
+            style={{ position: 'fixed', zIndex: 99999, top: -9999, left: -9999 }}
+            className="max-h-[200px] min-w-[180px] overflow-y-auto rounded-lg border border-border/60 bg-popover/98 py-1 shadow-xl backdrop-blur-xl"
+          >
+            <div className="px-3 py-1 text-[11px] text-muted-foreground/50">插入素材引用</div>
+            {mentionItems.map((item, i) => (
+              <button
+                key={item.id}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => handleMentionSelect(item)}
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors',
+                  i === mentionIndex ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/80 hover:bg-muted/40'
+                )}
+              >
+                {item.type === 'image'
+                  ? <ImageIcon className="size-3.5 text-blue-400" />
+                  : <Video className="size-3.5 text-violet-400" />}
+                <span className="truncate">@{item.label}</span>
+                <img src={item.url} alt="" className="ml-auto size-6 rounded object-cover" />
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
       </div>
 
       {/* Options — compact chip row */}

@@ -54,6 +54,8 @@ export interface VideoGenRequest {
   lastFrameImage?: string
   /** 参考视频 URL */
   referenceVideo?: string
+  /** 全能参考模式：内联素材引用（@label 标记对应的素材 URL） */
+  references?: Array<{ label: string; url: string; type?: 'image' | 'video' }>
 }
 
 /** 视频生成响应 */

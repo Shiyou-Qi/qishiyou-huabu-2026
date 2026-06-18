@@ -137,7 +137,7 @@ interface FlowState {
   canRedo: () => boolean
   createScenesFromScript: (
     scriptNodeId: string,
-    scenes: Array<{ description: string; dialogue: string; duration: string; camera: string }>
+    scenes: Array<{ description: string; dialogue: string; duration: string; camera: string; negativePrompt?: string; aspectRatio?: string; outputMode?: string }>
   ) => void
   // material picker
   materialPickerTarget: string | null

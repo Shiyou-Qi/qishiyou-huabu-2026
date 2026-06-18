@@ -12,6 +12,9 @@ interface SceneData {
   dialogue: string
   duration: string
   camera: string
+  negativePrompt?: string
+  aspectRatio?: string
+  outputMode?: string
 }
 
 function parseScene(content?: string): SceneData {
@@ -123,19 +126,46 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
             </button>
           )}
 
-          {/* Duration + Camera row */}
-          <div className="mt-2 flex gap-2">
-            <div className="flex flex-1 items-center gap-1.5 rounded-lg border border-border/30 bg-muted/10 px-2.5 py-1.5">
-              <Clock className="size-3 shrink-0 text-muted-foreground/50" />
+          {/* Negative prompt */}
+          {(scene.negativePrompt || editing === 'negative') ? (
+            <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
+              <span className="mt-0.5 shrink-0 text-[10px] font-bold text-amber-500/50">排除</span>
               <input
-                value={scene.duration}
-                onChange={(e) => update({ duration: e.target.value })}
+                value={scene.negativePrompt || ''}
+                onChange={(e) => update({ negativePrompt: e.target.value })}
+                onBlur={() => { if (!scene.negativePrompt?.trim()) setEditing(null) }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
-                placeholder="3s"
-                className="nodrag nopan w-full bg-transparent text-[12px] text-foreground/80 placeholder:text-muted-foreground/30 focus:outline-none"
+                placeholder="负向提示词..."
+                autoFocus={editing === 'negative'}
+                className="nodrag nopan w-full bg-transparent text-[12px] text-amber-600/70 placeholder:text-amber-400/30 focus:outline-none"
               />
             </div>
+          ) : (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setEditing('negative')}
+              className="mt-2 flex w-full items-center gap-1.5 rounded-lg border border-dashed border-amber-500/20 px-2.5 py-1.5 text-[11px] text-amber-400/40 hover:border-amber-500/30 hover:text-amber-400/60 transition-colors"
+            >
+              添加负向提示词
+            </button>
+          )}
+
+          {/* Duration + Camera row */}
+          <div className="mt-2 flex gap-2">
+            {scene.outputMode !== 'image' && (
+              <div className="flex flex-1 items-center gap-1.5 rounded-lg border border-border/30 bg-muted/10 px-2.5 py-1.5">
+                <Clock className="size-3 shrink-0 text-muted-foreground/50" />
+                <input
+                  value={scene.duration}
+                  onChange={(e) => update({ duration: e.target.value })}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  placeholder="5s"
+                  className="nodrag nopan w-full bg-transparent text-[12px] text-foreground/80 placeholder:text-muted-foreground/30 focus:outline-none"
+                />
+              </div>
+            )}
             <div className="flex flex-1 items-center gap-1.5 rounded-lg border border-border/30 bg-muted/10 px-2.5 py-1.5">
               <Camera className="size-3 shrink-0 text-muted-foreground/50" />
               <input
@@ -143,11 +173,25 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
                 onChange={(e) => update({ camera: e.target.value })}
                 onPointerDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
-                placeholder="镜头运动..."
+                placeholder={scene.outputMode === 'image' ? '构图景别...' : '运镜术语...'}
                 className="nodrag nopan w-full bg-transparent text-[12px] text-foreground/80 placeholder:text-muted-foreground/30 focus:outline-none"
               />
             </div>
           </div>
+
+          {/* Metadata tags */}
+          {(scene.aspectRatio || scene.outputMode) && (
+            <div className="mt-1.5 flex items-center gap-1">
+              {scene.outputMode && (
+                <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${scene.outputMode === 'video' ? 'bg-violet-500/10 text-violet-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                  {scene.outputMode === 'video' ? '视频' : '图片'}
+                </span>
+              )}
+              {scene.aspectRatio && (
+                <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground/60">{scene.aspectRatio}</span>
+              )}
+            </div>
+          )}
         </>
       )}
 

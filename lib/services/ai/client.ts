@@ -129,8 +129,27 @@ export async function videoGenSeedance(
     })
   }
 
-  // 文字描述（即便有图片也必传，描述期望的动效）
-  content.push({ type: 'text', text: req.prompt })
+  // 全能参考模式：解析 @label 引用，构建交错的 text + image 内容
+  if (req.references?.length && req.prompt.includes('@')) {
+    const refMap = new Map(req.references.map(r => [`@${r.label}`, r]))
+    const escaped = req.references.map(r =>
+      `@${r.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`
+    )
+    const regex = new RegExp(`(${escaped.join('|')})`)
+    const parts = req.prompt.split(regex)
+
+    for (const part of parts) {
+      const ref = refMap.get(part)
+      if (ref) {
+        const url = await toPublicImageUrl(ref.url)
+        content.push({ type: 'image_url', image_url: { url, role: 'reference' } })
+      } else if (part.trim()) {
+        content.push({ type: 'text', text: part })
+      }
+    }
+  } else {
+    content.push({ type: 'text', text: req.prompt })
+  }
 
   // 构造请求体
   const body: Record<string, unknown> = {

@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       firstFrameImage: body.firstFrameImage,
       lastFrameImage: body.lastFrameImage,
       referenceVideo: body.referenceVideo,
+      references: body.references,
     })
 
     return NextResponse.json(result)
