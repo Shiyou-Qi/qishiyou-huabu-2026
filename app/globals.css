@@ -1,0 +1,302 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.998 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --edge-color: oklch(0.35 0 0);
+  --edge-glow: oklch(0.45 0 0);
+  --edge-flow: oklch(0.55 0 0);
+  --edge-flow-bright: oklch(0.65 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: #262626;
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.19 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.95 0 0);
+  --primary-foreground: oklch(0.1 0 0);
+  --secondary: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.23 0 0);
+  --muted-foreground: oklch(0.58 0 0);
+  --accent: oklch(0.26 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.5 0.2 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border: oklch(0.30 0 0);
+  --input: oklch(0.24 0 0);
+  --ring: oklch(0.5 0 0);
+  --edge-color: oklch(0.75 0 0);
+  --edge-glow: oklch(0.65 0 0);
+  --edge-flow: oklch(0.88 0 0);
+  --edge-flow-bright: oklch(0.95 0 0);
+  --sidebar: oklch(0.13 0 0);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.75 0 0);
+  --sidebar-primary-foreground: oklch(0.95 0 0);
+  --sidebar-accent: oklch(0.21 0 0);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(0.23 0 0);
+  --sidebar-ring: oklch(0.5 0 0);
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ─── React Flow ─────────────────────────────────────────── */
+.canvas-tech-grid {
+  --canvas-grid-line: oklch(0.42 0.02 250 / 0.08);
+  --canvas-grid-major: oklch(0.44 0.02 250 / 0.12);
+  --canvas-grid-dot: oklch(0.50 0.02 250 / 0.22);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 22% 18%, oklch(0.70 0.07 245 / 0.10), transparent 34rem),
+    linear-gradient(135deg, oklch(0.965 0 0), oklch(0.94 0.01 245));
+}
+
+.dark .canvas-tech-grid {
+  --canvas-grid-line: oklch(0.68 0.02 250 / 0.08);
+  --canvas-grid-major: oklch(0.72 0.015 250 / 0.14);
+  --canvas-grid-dot: oklch(0.78 0.01 250 / 0.28);
+  background:
+    radial-gradient(circle at 24% 16%, oklch(0.50 0.08 245 / 0.06), transparent 36rem),
+    radial-gradient(circle at 80% 76%, oklch(0.44 0.07 190 / 0.05), transparent 34rem),
+    linear-gradient(135deg, oklch(0.115 0.004 250), oklch(0.13 0.006 250) 52%, oklch(0.105 0.004 250));
+}
+
+.canvas-tech-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    /* 细点阵 */
+    radial-gradient(circle at center, var(--canvas-grid-dot) 0 1px, transparent 1.5px),
+    /* 粗点阵 (每 8 格一个大点) */
+    radial-gradient(circle at center, var(--canvas-grid-major) 0 1.5px, transparent 1.5px);
+  background-size: 28px 28px, 224px 224px;
+  background-position: center;
+}
+
+.canvas-tech-grid .react-flow {
+  background: transparent;
+}
+
+.canvas-tech-grid .react-flow__pane {
+  background: transparent;
+}
+
+.canvas-tech-grid .canvas-dashed-grid .react-flow__background-pattern.dots {
+  opacity: 0.6;
+}
+
+.react-flow__node {
+  cursor: grab;
+}
+.react-flow__node:active {
+  cursor: grabbing;
+}
+.react-flow__node.selected {
+  z-index: 100;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 5px var(--edge-glow));
+}
+
+.react-flow__handle {
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  background: var(--edge-color) !important;
+  border: 2px solid var(--background) !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle {
+  opacity: 1;
+}
+.react-flow__handle:hover {
+  transform: scale(1.5);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--edge-color) 25%, transparent);
+}
+
+.react-flow__connection-line {
+  stroke: var(--edge-color);
+  stroke-width: 2;
+}
+
+/* Disable React Flow's built-in dashed animation on edges */
+.react-flow__edge.animated path {
+  stroke-dasharray: none !important;
+  animation: none !important;
+}
+
+/* Edge energy flow animation (activated when connected node is selected) */
+.edge-energy-glow {
+  opacity: 0.35;
+  filter: blur(4px);
+  pointer-events: none;
+}
+.edge-energy-flow {
+  animation: edgeEnergyFlow 0.8s linear infinite;
+  filter: drop-shadow(0 0 3px var(--edge-glow)) drop-shadow(0 0 8px color-mix(in oklch, var(--edge-glow) 40%, transparent));
+  pointer-events: none;
+}
+@keyframes edgeEnergyFlow {
+  to { stroke-dashoffset: -24; }
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: oklch(0.3 0 0 / 0.5); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(0.4 0 0 / 0.7); }
+
+/* ─── Glassmorphism ──────────────────────────────────────── */
+.glass {
+  background: oklch(0.99 0 0 / 0.88);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid oklch(0.88 0 0 / 0.7);
+}
+.dark .glass {
+  background: oklch(0.16 0 0 / 0.88);
+  border: 1px solid oklch(0.28 0 0 / 0.6);
+}
+
+/* ─── Node selection glow ────────────────────────────────── */
+.node-selected-ring {
+  box-shadow:
+    0 0 0 1.5px var(--edge-color),
+    0 0 20px color-mix(in oklch, var(--edge-color) 15%, transparent),
+    0 8px 32px oklch(0 0 0 / 0.3);
+}
+
+/* ─── Video player ───────────────────────────────────────── */
+.node-video {
+  border-radius: 0;
+  background: black;
+}
+.node-video::-webkit-media-controls-panel {
+  background: linear-gradient(transparent 0%, rgba(0,0,0,0.7) 100%);
+  padding: 0 8px 4px;
+}
+.node-video::-webkit-media-controls-play-button,
+.node-video::-webkit-media-controls-mute-button,
+.node-video::-webkit-media-controls-fullscreen-button {
+  filter: brightness(1.2);
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.node-video::-webkit-media-controls-play-button:hover,
+.node-video::-webkit-media-controls-mute-button:hover,
+.node-video::-webkit-media-controls-fullscreen-button:hover {
+  background: rgba(255,255,255,0.15);
+}
+.node-video::-webkit-media-controls-timeline {
+  height: 4px;
+  border-radius: 2px;
+  margin: 0 6px;
+}
+.node-video::-webkit-media-controls-current-time-display,
+.node-video::-webkit-media-controls-time-remaining-display {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,0.85);
+}
+
+/* ─── Misc utilities ─────────────────────────────────────── */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* ─── Mention input: 空状态用 CSS ::before 渲染 placeholder ── */
+[contenteditable][data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  opacity: 0.55;
+  pointer-events: none;
+}
+[contenteditable][data-empty="true"]:focus::before {
+  opacity: 0.35;
+}
