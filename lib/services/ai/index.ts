@@ -26,12 +26,12 @@ import {
 /** 模型列表（供前端使用） */
 export const MODELS: ModelInfo[] = [
   // ── 文本模型 ──
+  { id: 'deepseek-v4-pro',   name: 'DeepSeek V4 Pro',  type: 'text',  provider: 'deepseek', description: '最新旗舰 · 百万上下文 · 多模态', tags: ['旗舰'], capabilities: { maxTokens: 131072 } },
+  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', type: 'text', provider: 'deepseek', description: '轻量极速 · 高性价比',             tags: ['轻量'], capabilities: { maxTokens: 65536 } },
   { id: 'doubao-seed-2-0-pro-260215', name: '豆包 Seed 2.0 Pro', type: 'text', provider: 'volces',  description: '多模态旗舰 · 原生全模态理解 · 长推理', tags: ['旗舰'], capabilities: { maxTokens: 16384 } },
   { id: 'gpt-4o',        name: 'GPT-4o',          type: 'text',  provider: 'openai',   description: '多模态旗舰 · 128K 上下文',      tags: ['旗舰'], capabilities: { maxTokens: 16384 } },
   { id: 'gpt-4o-mini',   name: 'GPT-4o Mini',     type: 'text',  provider: 'openai',   description: '轻量快速 · 日常任务',            tags: ['轻量'], capabilities: { maxTokens: 16384 } },
   { id: 'o4-mini',       name: 'o4-mini',          type: 'text',  provider: 'openai',   description: '推理增强 · 复杂逻辑',            tags: ['推理'], capabilities: { maxTokens: 100000 } },
-  { id: 'deepseek-v4-pro',   name: 'DeepSeek V4 Pro',  type: 'text',  provider: 'deepseek', description: '最新旗舰 · 百万上下文 · 多模态', tags: ['旗舰'], capabilities: { maxTokens: 131072 } },
-  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', type: 'text', provider: 'deepseek', description: '轻量极速 · 高性价比',             tags: ['轻量'], capabilities: { maxTokens: 65536 } },
   { id: 'qwen3-max',     name: 'Qwen3 Max',        type: 'text',  provider: 'qwen',     description: '阿里旗舰 · 多语言 · 长文本',      tags: ['旗舰'], capabilities: { maxTokens: 32768 } },
   { id: 'qwen3-plus',    name: 'Qwen3 Plus',       type: 'text',  provider: 'qwen',     description: '均衡体验 · 高性价比',              tags: [],       capabilities: { maxTokens: 131072 } },
   { id: 'moonshot-v1-auto', name: 'Kimi Auto',     type: 'text',  provider: 'kimi',     description: '长文本 · 20万字上下文',           tags: ['长文'], capabilities: { maxTokens: 8192 } },

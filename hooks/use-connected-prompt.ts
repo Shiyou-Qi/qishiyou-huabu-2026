@@ -1,9 +1,21 @@
 import { useFlowStore, PROMPT_HANDLE } from '@/lib/store'
 
-const PROMPT_SOURCE_TYPES = new Set(['text', 'promptAssistant', 'scene'])
+const PROMPT_SOURCE_TYPES = new Set(['text', 'promptAssistant', 'scene', 'storyboard'])
 
-function extractPromptText(type: string, content: string | undefined): string {
+function extractPromptText(type: string, content: string | undefined, sourceHandle?: string): string {
   if (!content) return ''
+  if (type === 'storyboard' && sourceHandle?.startsWith('row-')) {
+    try {
+      const rows = JSON.parse(content)
+      const idx = parseInt(sourceHandle.slice(4), 10)
+      const row = rows[idx]
+      if (!row) return ''
+      const parts: string[] = []
+      if (row.description) parts.push(row.description)
+      if (row.dialogue) parts.push(row.dialogue)
+      return parts.join('\n')
+    } catch { return content }
+  }
   if (type === 'scene') {
     try {
       const scene = JSON.parse(content)
@@ -55,7 +67,7 @@ export function useConnectedPrompt(nodeId: string): ConnectedPrompt | null {
     sourceId: sourceNode.id,
     edgeId,
     label: sourceNode.data.label,
-    text: extractPromptText(sourceNode.data.type, sourceNode.data.content as string),
+    text: extractPromptText(sourceNode.data.type, sourceNode.data.content as string, activeEdge.sourceHandle ?? undefined),
     disconnect: () => deleteEdge(edgeId),
   }
 }

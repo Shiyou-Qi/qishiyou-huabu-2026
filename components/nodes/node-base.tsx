@@ -28,6 +28,13 @@ interface InputPort {
   top?: string
 }
 
+interface OutputPort {
+  id: string
+  label?: string
+  color?: string
+  top?: string
+}
+
 interface NodeBaseProps {
   nodeType: NodeType
   label: string
@@ -39,6 +46,7 @@ interface NodeBaseProps {
   hasInput?: boolean
   hasOutput?: boolean
   inputPorts?: InputPort[]
+  outputPorts?: OutputPort[]
   children: ReactNode
   footer?: ReactNode
   width?: string
@@ -56,6 +64,7 @@ export const NodeBase = forwardRef<HTMLDivElement, NodeBaseProps>(function NodeB
   hasInput = true,
   hasOutput = true,
   inputPorts,
+  outputPorts,
   children,
   footer,
   width = 'w-[320px]',
@@ -138,15 +147,31 @@ export const NodeBase = forwardRef<HTMLDivElement, NodeBaseProps>(function NodeB
         )
       )}
 
-      {/* Output handle */}
-      {hasOutput && (
-        <Handle
-          id="output"
-          type="source"
-          position={Position.Right}
-          className="!z-30"
-          style={{ top: '50%' }}
-        />
+      {/* Output handle(s) */}
+      {outputPorts && outputPorts.length > 0 ? (
+        outputPorts.map((port, i) => {
+          const top = port.top ?? `${((i + 1) / (outputPorts.length + 1)) * 100}%`
+          return (
+            <Handle
+              key={port.id}
+              id={port.id}
+              type="source"
+              position={Position.Right}
+              className={`${port.color || '!bg-primary !border-background !border-2'} !z-30`}
+              style={{ top }}
+            />
+          )
+        })
+      ) : (
+        hasOutput && (
+          <Handle
+            id="output"
+            type="source"
+            position={Position.Right}
+            className="!z-30"
+            style={{ top: '50%' }}
+          />
+        )
       )}
     </div>
   )

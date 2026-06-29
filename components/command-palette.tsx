@@ -125,7 +125,7 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem onSelect={() => addNodeAtCenter('script')}>
             <FileCode2 className="text-orange-400" />
-            <span>分镜脚本</span>
+            <span>AI 编剧</span>
           </CommandItem>
           <CommandItem onSelect={() => addNodeAtCenter('scene')}>
             <Clapperboard className="text-cyan-400" />

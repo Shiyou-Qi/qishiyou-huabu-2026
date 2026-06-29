@@ -37,12 +37,12 @@ const nodeOptions: {
   bgClass: string
   beta?: boolean
 }[] = [
-  { type: 'text',           label: 'AI 文本',  icon: AlignLeft,   color: 'text-amber-400',   bgClass: 'bg-amber-500/10' },
-  { type: 'image',          label: 'AI 生图',  icon: ImageIcon,   color: 'text-blue-400',    bgClass: 'bg-blue-500/10' },
-  { type: 'video',          label: 'AI 视频',  icon: Video,       color: 'text-violet-400',  bgClass: 'bg-violet-500/10' },
-  { type: 'script',         label: '分镜脚本', icon: FileCode2,      color: 'text-orange-400',  bgClass: 'bg-orange-500/10' },
-  { type: 'scene',          label: '分镜',     icon: Clapperboard,  color: 'text-cyan-400',    bgClass: 'bg-cyan-500/10' },
-  { type: 'promptAssistant', label: '提示词助手', icon: MessageSquareText, color: 'text-emerald-400', bgClass: 'bg-emerald-500/10' },
+  { type: 'text',           label: 'AI 文本',    icon: AlignLeft,          color: 'text-amber-400',   bgClass: 'bg-amber-500/10' },
+  { type: 'image',          label: 'AI 生图',    icon: ImageIcon,          color: 'text-blue-400',    bgClass: 'bg-blue-500/10' },
+  { type: 'video',          label: 'AI 视频',    icon: Video,              color: 'text-violet-400',  bgClass: 'bg-violet-500/10' },
+  { type: 'script',         label: 'AI 编剧',    icon: FileCode2,          color: 'text-orange-400',  bgClass: 'bg-orange-500/10' },
+  { type: 'scene',          label: '分镜',       icon: Clapperboard,       color: 'text-cyan-400',    bgClass: 'bg-cyan-500/10' },
+  { type: 'promptAssistant', label: '提示词助手', icon: MessageSquareText,  color: 'text-emerald-400', bgClass: 'bg-emerald-500/10' },
 ]
 
 const toolbarItems = [

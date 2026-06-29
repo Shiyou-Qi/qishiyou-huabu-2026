@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect, useRef, useCallback } from 'react'
 import { NodeProps, Node } from '@xyflow/react'
-import { FileCode2, Sparkles, Loader2, Palette, ChevronDown, ChevronRight, Film, ImageIcon } from 'lucide-react'
+import { FileCode2, Sparkles, Loader2, Palette, ChevronDown, ChevronRight, Film, ImageIcon, Check, RotateCcw, Users, Clapperboard } from 'lucide-react'
 import { CustomNodeData, useFlowStore } from '@/lib/store'
 import { ModelSelector } from '@/components/model-selector'
 import { NodeBase } from './node-base'
@@ -16,12 +16,19 @@ const STYLE_GROUPS: { group: string; items: string[] }[] = [
   { group: '氛围调性', items: ['温馨', '治愈', '热血', '燃', '搞笑', '沙雕', '催泪', '压抑', '紧张', '神秘', '浪漫', '清新', '文艺', '史诗', '暴力美学', '荒诞', '讽刺', '励志', '怀旧', '空灵'] },
 ]
 
+interface ScriptResult {
+  title: string
+  synopsis: string
+  characters: Array<{ name: string; appearance: string; role: string }>
+  scenes: Array<{ description: string; dialogue: string; duration: string; camera: string; negativePrompt: string; aspectRatio: string; characters?: string[] }>
+}
+
 type ScriptNodeProps = NodeProps<Node<CustomNodeData>>
 
 function ScriptNode({ id, data, selected }: ScriptNodeProps) {
   const updateNodeData = useFlowStore((s) => s.updateNodeData)
   const deleteNode = useFlowStore((s) => s.deleteNode)
-  const createScenesFromScript = useFlowStore((s) => s.createScenesFromScript)
+  const createScreenplayNode = useFlowStore((s) => s.createScreenplayNode)
 
   const [theme, setTheme] = useState(data.content || '')
   const [style, setStyle] = useState<string[]>(() => {
@@ -38,7 +45,8 @@ function ScriptNode({ id, data, selected }: ScriptNodeProps) {
   })
   const [styleExpanded, setStyleExpanded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [sceneCount, setSceneCount] = useState(0)
+  const [generated, setGenerated] = useState(false)
+  const [lastResult, setLastResult] = useState<{ charCount: number; sceneCount: number; title: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const { models: textModels } = useModels({ type: 'text' })
@@ -47,19 +55,19 @@ function ScriptNode({ id, data, selected }: ScriptNodeProps) {
     if (textModels.length > 0 && !selectedModel) setSelectedModel(textModels[0].id)
   }, [textModels, selectedModel])
 
-  const persistStyle = useCallback((next: string[]) => {
-    setStyle(next)
-    updateNodeData(id, { meta: JSON.stringify({ styles: next, outputMode }) })
-  }, [id, updateNodeData, outputMode])
+  const persistMeta = useCallback((styles: string[], mode: string) => {
+    updateNodeData(id, { meta: JSON.stringify({ styles, outputMode: mode }) })
+  }, [id, updateNodeData])
 
   const handleOutputModeChange = (mode: 'image' | 'video') => {
     setOutputMode(mode)
-    updateNodeData(id, { meta: JSON.stringify({ styles: style, outputMode: mode }) })
+    persistMeta(style, mode)
   }
 
   const toggleStyle = (s: string) => {
     const next = style.includes(s) ? style.filter(v => v !== s) : [...style, s]
-    persistStyle(next)
+    setStyle(next)
+    persistMeta(next, outputMode)
   }
 
   const handleThemeChange = (value: string) => {
@@ -70,58 +78,61 @@ function ScriptNode({ id, data, selected }: ScriptNodeProps) {
   const handleGenerate = async () => {
     if (!theme.trim() || isGenerating || !selectedModel) return
     setIsGenerating(true)
+    setGenerated(false)
+    setLastResult(null)
     updateNodeData(id, { status: 'generating' })
 
     const controller = new AbortController()
     abortRef.current = controller
 
     const styleHint = style.length > 0
-      ? `\n整体风格定位：${style.join('、')}，所有分镜都要贴合此风格`
+      ? `\n整体风格定位：${style.join('、')}，所有角色和分镜都要贴合此风格`
       : ''
 
-    const systemPrompt = outputMode === 'video'
-      ? `你是专业的 AI 视频分镜师，为 Seedance 视频生成模型编写提示词。根据用户的主题描述，生成分镜脚本。
+    const cameraTerms = outputMode === 'video'
+      ? '推进(dolly in) | 拉远(dolly out) | 左平移(pan left) | 右平移(pan right) | 上摇(tilt up) | 下摇(tilt down) | 跟随(tracking shot) | 环绕(orbit) | 手持(handheld) | 固定(static) | 航拍(aerial) | 慢推(slow push in) | 升降(crane)'
+      : '特写(close-up) | 中景(medium shot) | 全景(wide shot) | 大全景(extreme wide) | 俯视(bird\'s eye) | 仰视(low angle) | 平视(eye level) | 侧面(side view) | 四分之三(three-quarter)'
 
-每个分镜的 description 按此结构编写（直接可用于视频生成 AI）：
-- 主体+动作：谁/什么在做什么（具体动态描述）
-- 场景环境：在哪里，周围元素
-- 光线氛围：光源、色温、明暗
-- 质量标签：从 cinematic, 8K, film grain, shallow depth of field, professional color grading, dramatic lighting, golden hour 中选 2-3 个
+    const mediaType = outputMode === 'video' ? '视频' : '图片'
+    const qualityTags = outputMode === 'video'
+      ? 'cinematic, 8K, film grain, shallow depth of field, professional color grading, dramatic lighting, golden hour'
+      : '8K, masterpiece, ultra-detailed, sharp focus, professional photography, studio lighting'
 
-camera 运镜术语（中英双语格式）：
-推进(dolly in) | 拉远(dolly out) | 左平移(pan left) | 右平移(pan right) | 上摇(tilt up) | 下摇(tilt down) | 跟随(tracking shot) | 环绕(orbit) | 手持(handheld) | 固定(static) | 航拍(aerial) | 慢推(slow push in) | 升降(crane)
+    const systemPrompt = `你是专业的 AI ${mediaType}编剧和分镜师，精通 Seedance 2.0 视频模型的提示词格式。根据用户的主题描述，生成一个完整的剧本，包含角色提取和分镜脚本。
 
-negativePrompt 必填，常用组合：blurry, low quality, distorted, static, frozen, watermark, text, bad anatomy
-duration：简单运动 5s，复杂运镜 8-10s
-aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1（根据内容选最佳）
+一、角色提取：
+- 从剧情中提取所有有辨识度的角色（主角、配角、重要路人）
+- 每个角色需要详细的外貌描述（用于生成角色三视图参考），包括：
+  · 性别、年龄段、体型
+  · 发型发色、五官特征
+  · 服装材质、颜色、配饰
+  · 标志性特征（如伤疤、纹身、特殊道具）
+
+二、分镜脚本（Seedance 2.0 时间轴格式）：
+每个分镜的 description 必须使用 Seedance 2.0 时间轴 + @角色引用格式：
+- 使用 [起始时间-结束时间] 标记时间轴片段，例如 [0s-2s]、[2s-5s]
+- 使用 @角色名 引用角色（需与 characters 里的 name 完全一致）
+- 每个时间片段描述：@角色 + 动作 + 场景环境 + 光影氛围
+- 质量标签（选 2-3 个）：${qualityTags}
+
+description 示例：
+"[0s-2s] @小明 站在雨中的街头，低头看着手中的信，城市霓虹灯光反射在湿润的地面上，cinematic, dramatic lighting [2s-4s] @小明 缓缓抬起头望向远方，雨水沿发丝滑落，浅景深虚化背景，8K, shallow depth of field [4s-5s] 远景拉开，@小明 的身影在雨中渐渐模糊，冷色调城市夜景"
+
+characters 字段：列出该分镜中出场的角色名数组（用于 @引用匹配）
+
+camera ${outputMode === 'video' ? '运镜' : '构图'}术语（中英双语）：${cameraTerms}
+negativePrompt 必填：blurry, low quality, distorted, watermark, text, bad anatomy${outputMode === 'video' ? ', static, frozen' : ', ugly'}
+${outputMode === 'video' ? 'duration：简单运动 5s，复杂运镜 8-10s' : ''}
+aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1${styleHint}
 
 要求：
-1. 生成 4-8 个分镜，起承转合结构
-2. 场景间视觉连贯，叙事递进${styleHint}
+1. 角色数量 2-6 个，要有辨识度
+2. 分镜 4-8 个，起承转合结构
+3. description 必须包含时间轴标记 [Xs-Ys]
+4. 出场角色必须用 @角色名 引用
 
 严格按 JSON 返回：
-{"scenes":[{"description":"完整视频提示词","dialogue":"台词/旁白","duration":"5s","camera":"推进(dolly in)","negativePrompt":"blurry, low quality","aspectRatio":"16:9"}]}`
-      : `你是专业的 AI 绘画分镜师，为图片生成 AI 编写提示词。根据用户的主题描述，生成分镜脚本。
-
-每个分镜的 description 按此结构编写（直接可用于图片生成 AI）：
-- 主体+状态：谁/什么，什么姿态/表情
-- 构图+层次：主体位置，前景/背景
-- 场景环境：场景细节、道具、色彩基调
-- 光线材质：光源方向、阴影、质感
-- 质量标签：从 8K, masterpiece, ultra-detailed, sharp focus, professional photography, studio lighting 中选 2-3 个
-
-camera 描述景别构图（中英双语格式）：
-特写(close-up) | 中景(medium shot) | 全景(wide shot) | 大全景(extreme wide) | 俯视(bird's eye) | 仰视(low angle) | 平视(eye level) | 侧面(side view) | 四分之三(three-quarter)
-
-negativePrompt 必填，常用组合：blurry, low quality, distorted, watermark, text, bad anatomy, ugly
-aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
-
-要求：
-1. 生成 4-8 个分镜，起承转合结构
-2. 画面间视觉连贯，叙事递进${styleHint}
-
-严格按 JSON 返回：
-{"scenes":[{"description":"完整图片提示词","dialogue":"配文/旁白","duration":"","camera":"特写(close-up)","negativePrompt":"blurry, low quality","aspectRatio":"16:9"}]}`
+{"title":"剧本标题","synopsis":"概要（2-3句话描述整体故事）","characters":[{"name":"角色名","appearance":"详细外貌/服装/特征描述","role":"主角/配角"}],"scenes":[{"description":"[0s-2s] @角色 时间轴提示词...","dialogue":"台词/旁白","duration":"${outputMode === 'video' ? '5s' : ''}","camera":"运镜术语","negativePrompt":"排除词","aspectRatio":"16:9","characters":["出场角色名1","出场角色名2"]}]}`
 
     try {
       const res = await fetch('/api/generate/text', {
@@ -132,12 +143,15 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
           prompt: theme,
           systemPrompt,
           temperature: 0.8,
-          maxTokens: 3000,
+          maxTokens: 4000,
         }),
         signal: controller.signal,
       })
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({} as Record<string, string>))
+        throw new Error(errBody.error || `HTTP ${res.status}`)
+      }
       const result = await res.json() as { text: string }
       const text = result.text?.trim()
       if (!text) throw new Error('生成结果为空')
@@ -146,31 +160,54 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
       if (!jsonMatch) throw new Error('无法解析 JSON')
 
       const parsed = JSON.parse(jsonMatch[0])
-      if (!parsed.scenes || !Array.isArray(parsed.scenes)) throw new Error('格式错误')
+      if (!parsed.scenes || !Array.isArray(parsed.scenes)) throw new Error('格式错误：缺少 scenes')
 
-      const styleStr = style.join(',')
-      const scenes = parsed.scenes.map((s: Record<string, string>) => ({
-        description: s.description || '',
-        dialogue: s.dialogue || '',
-        duration: s.duration || (outputMode === 'video' ? '5s' : ''),
-        camera: s.camera || '',
-        negativePrompt: s.negativePrompt || '',
-        aspectRatio: s.aspectRatio || '16:9',
-        outputMode,
-        style: styleStr,
-      }))
+      const scriptData: ScriptResult = {
+        title: parsed.title || '未命名剧本',
+        synopsis: parsed.synopsis || '',
+        characters: (parsed.characters || []).map((c: Record<string, string>) => ({
+          name: c.name || '未命名角色',
+          appearance: c.appearance || '',
+          role: c.role || '配角',
+        })),
+        scenes: parsed.scenes.map((s: Record<string, unknown>) => ({
+          description: (s.description as string) || '',
+          dialogue: (s.dialogue as string) || '',
+          duration: (s.duration as string) || (outputMode === 'video' ? '5s' : ''),
+          camera: (s.camera as string) || '',
+          negativePrompt: (s.negativePrompt as string) || 'blurry, low quality',
+          aspectRatio: (s.aspectRatio as string) || '16:9',
+          characters: Array.isArray(s.characters) ? (s.characters as string[]) : [],
+        })),
+      }
 
-      createScenesFromScript(id, scenes)
-      setSceneCount(scenes.length)
+      // Create screenplay node only — user confirms there to create character/scene nodes
+      createScreenplayNode(id, {
+        ...scriptData,
+        scenes: scriptData.scenes.map(s => ({ ...s, outputMode })),
+      })
+
+      setGenerated(true)
+      setLastResult({
+        title: scriptData.title,
+        charCount: scriptData.characters.length,
+        sceneCount: scriptData.scenes.length,
+      })
       updateNodeData(id, { status: 'completed' })
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      console.error('分镜生成失败:', err)
+      console.error('剧本生成失败:', err)
       updateNodeData(id, { status: 'failed' })
     } finally {
       setIsGenerating(false)
       abortRef.current = null
     }
+  }
+
+  const handleReset = () => {
+    setGenerated(false)
+    setLastResult(null)
+    updateNodeData(id, { status: theme.trim() ? 'ready' : 'idle' })
   }
 
   const canGenerate = !isGenerating && !!theme.trim() && !!selectedModel
@@ -185,14 +222,14 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
       icon={<FileCode2 className="size-3.5" />}
       width={styleExpanded ? 'w-[520px]' : 'w-[360px]'}
     >
-      {/* Theme / prompt input */}
-      <div className="nodrag nopan rounded-xl border border-border/40 bg-muted/20">
+      {/* Theme input */}
+      <div className="nodrag nopan rounded-xl border border-border/50 bg-muted/20 transition-colors focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/20">
         <textarea
           value={theme}
           onChange={(e) => handleThemeChange(e.target.value)}
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
-          placeholder="输入视频主题或创意描述，AI 将自动生成分镜节点..."
+          placeholder="输入主题或创意想法，AI 将生成完整剧本（含角色、分镜）..."
           rows={3}
           className="nodrag nopan block w-full resize-none bg-transparent px-3.5 py-3 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
         />
@@ -201,10 +238,7 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
       {/* Style selector */}
       <div className="nodrag nopan mt-2.5" onPointerDown={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setStyleExpanded(!styleExpanded)}
-            className="flex items-center gap-1.5"
-          >
+          <button onClick={() => setStyleExpanded(!styleExpanded)} className="flex items-center gap-1.5">
             <Palette className="size-3 text-muted-foreground/50" />
             <span className="text-[12px] font-medium text-muted-foreground/70">剧本风格</span>
             {style.length > 0 && (
@@ -212,8 +246,7 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
             )}
             {styleExpanded
               ? <ChevronDown className="size-3 text-muted-foreground/40" />
-              : <ChevronRight className="size-3 text-muted-foreground/40" />
-            }
+              : <ChevronRight className="size-3 text-muted-foreground/40" />}
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-0.5 rounded-lg bg-muted/40 p-0.5">
@@ -223,8 +256,7 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
                 outputMode === 'image' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/50 hover:text-muted-foreground'
               )}
             >
-              <ImageIcon className="size-3" />
-              图片
+              <ImageIcon className="size-3" /> 图片
             </button>
             <button
               onClick={() => handleOutputModeChange('video')}
@@ -232,13 +264,11 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
                 outputMode === 'video' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/50 hover:text-muted-foreground'
               )}
             >
-              <Film className="size-3" />
-              视频
+              <Film className="size-3" /> 视频
             </button>
           </div>
         </div>
 
-        {/* Selected tags (always visible when collapsed) */}
         {!styleExpanded && style.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {style.map(s => (
@@ -247,7 +277,6 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
           </div>
         )}
 
-        {/* Full style panel */}
         {styleExpanded && (
           <div className="mt-2 rounded-xl border border-border/30 bg-muted/10 p-2.5" onKeyDown={(e) => e.stopPropagation()}>
             {STYLE_GROUPS.map(({ group, items }) => (
@@ -278,19 +307,36 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
       {isGenerating && (
         <div className="mt-2.5 flex items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 py-3">
           <Loader2 className="size-4 animate-spin text-primary" />
-          <span className="text-[12px] text-primary">AI 正在生成{outputMode === 'video' ? '视频' : '图片'}分镜脚本...</span>
-        </div>
-      )}
-      {!isGenerating && sceneCount > 0 && (
-        <div className="mt-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-2.5 text-[12px] text-emerald-500">
-          已生成 <span className="font-semibold">{sceneCount}</span> 个{outputMode === 'video' ? '视频' : '图片'}分镜节点
+          <span className="text-[12px] text-primary">AI 正在生成剧本，完成后自动创建节点...</span>
         </div>
       )}
 
-      {/* Bottom bar: model + generate */}
+      {/* Generated result summary */}
+      {generated && lastResult && (
+        <div className="mt-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3.5 py-2.5">
+          <div className="flex items-center gap-2">
+            <Check className="size-3.5 text-emerald-500" />
+            <span className="text-[12px] font-medium text-emerald-400">{lastResult.title}</span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-3 text-[11px] text-emerald-600/70">
+            <span className="flex items-center gap-1">
+              <Users className="size-3" />
+              {lastResult.charCount} 个角色节点
+            </span>
+            <span className="flex items-center gap-1">
+              <Clapperboard className="size-3" />
+              {lastResult.sceneCount} 个分镜节点
+            </span>
+          </div>
+          <p className="mt-1 text-[10px] text-emerald-600/50">已创建剧本概览、角色三视图、分镜节点</p>
+        </div>
+      )}
+
+      {/* Bottom bar */}
       <div className="-mx-3.5 mt-3 flex items-center gap-1.5 border-t border-border/40 px-3.5 pt-2.5">
         <ModelSelector models={textModels} selected={selectedModel} onSelect={setSelectedModel} />
         <div className="flex-1" />
+
         {isGenerating ? (
           <button
             onPointerDown={(e) => e.stopPropagation()}
@@ -300,16 +346,26 @@ aspectRatio：横屏 16:9，竖屏 9:16，方形 1:1，4:3，3:4
           >
             <div className="size-2.5 rounded-sm bg-white" />
           </button>
+        ) : generated ? (
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleReset}
+            title="重新生成"
+            className="flex items-center gap-1.5 rounded-full border border-border/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/30"
+          >
+            <RotateCcw className="size-3" />
+            重新生成
+          </button>
         ) : (
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={handleGenerate}
             disabled={!canGenerate}
-            title="AI 生成分镜"
+            title="AI 生成剧本并创建节点"
             className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[11px] font-medium text-primary-foreground shadow-md shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-40"
           >
             <Sparkles className="size-3" />
-            生成分镜
+            生成剧本
           </button>
         )}
       </div>

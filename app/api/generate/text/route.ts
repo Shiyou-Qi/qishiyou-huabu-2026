@@ -53,15 +53,16 @@ export async function POST(request: Request) {
     const result = await generateText(req)
     return NextResponse.json(result)
   } catch (err) {
-    if (err instanceof AIError) {
+    if (err instanceof AIError || (err instanceof Error && err.name === 'AIError')) {
+      const ae = err as AIError
       return NextResponse.json(
-        { error: err.message, provider: err.provider },
-        { status: err.statusCode },
+        { error: ae.message, provider: ae.provider },
+        { status: ae.statusCode || 500 },
       )
     }
     console.error('Text generation error:', err)
     return NextResponse.json(
-      { error: '文本生成失败' },
+      { error: err instanceof Error ? err.message : '文本生成失败' },
       { status: 500 },
     )
   }

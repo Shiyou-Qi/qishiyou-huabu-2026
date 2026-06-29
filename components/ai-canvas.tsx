@@ -35,12 +35,16 @@ import TextNode from './nodes/text-node'
 import AudioNode from './nodes/audio-node'
 import ScriptNode from './nodes/script-node'
 import SceneNode from './nodes/scene-node'
+import ScreenplayNode from './nodes/screenplay-node'
+import StoryboardNode from './nodes/storyboard-node'
 import PromptAssistantNode from './nodes/prompt-assistant-node'
 import { SidebarToolbar } from './sidebar-toolbar'
 import { ZoomControls } from './zoom-controls'
 import { CanvasMenuPanel, CanvasMenuPanelType } from './canvas-menu-panel'
 import { CommandPalette } from './command-palette'
 import { CuttableEdge } from './edges/cuttable-edge'
+import { ProjectSidebar } from './project-sidebar'
+import { useProjectStore } from '@/lib/project-store'
 
 const nodeTypes = {
   imageNode: ImageNode,
@@ -49,6 +53,8 @@ const nodeTypes = {
   audioNode: AudioNode,
   scriptNode: ScriptNode,
   sceneNode: SceneNode,
+  storyboardNode: StoryboardNode,
+  screenplayNode: ScreenplayNode,
   promptAssistantNode: PromptAssistantNode,
 }
 
@@ -263,9 +269,13 @@ function Flow() {
   }, [fitView, handleDeleteSelected, handleDuplicateSelected, handleCutSelectedEdges, selectedNodes.length, selectedEdges.length, undo, redo])
 
   const hasSelection = selectedNodes.length > 0
+  const sidebarCollapsed = useProjectStore((s) => s.sidebarCollapsed)
+  const sidebarWidth = sidebarCollapsed ? 0 : 240
 
   return (
     <div className="canvas-tech-grid size-full h-screen bg-background">
+      <ProjectSidebar />
+      <div className="h-full transition-[margin] duration-200" style={{ marginLeft: sidebarWidth }}>
       <ReactFlow
         nodes={nodes}
         edges={displayEdges}
@@ -303,9 +313,10 @@ function Flow() {
           color="var(--canvas-grid-dot)"
         />
       </ReactFlow>
+      </div>
 
       {/* ── Top Bar ── */}
-      <div className="fixed left-20 right-4 top-4 z-50 flex items-center justify-between gap-3 pointer-events-none">
+      <div className="fixed right-4 top-4 z-50 flex items-center justify-between gap-3 pointer-events-none" style={{ left: sidebarWidth + 16 }}>
         {/* Brand */}
         <div className="glass flex items-center gap-3 rounded-2xl px-4 py-2.5 shadow-lg pointer-events-auto">
           <img src={isThemeMounted && theme === 'light' ? '/icon.svg' : '/baise.svg'} alt="logo" className="size-8 shrink-0 rounded-lg" />

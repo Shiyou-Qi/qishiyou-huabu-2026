@@ -13,7 +13,7 @@ import {
   MarkerType,
 } from '@xyflow/react'
 
-export type NodeType = 'text' | 'image' | 'video' | 'audio' | 'script' | 'scene' | 'promptAssistant'
+export type NodeType = 'text' | 'image' | 'video' | 'audio' | 'script' | 'scene' | 'storyboard' | 'promptAssistant' | 'screenplay'
 export type EdgeStyleType = 'curve' | 'straight'
 
 /** video 工具节点左侧的 4 个 tab 入参点（按 TABS 顺序） */
@@ -139,6 +139,26 @@ interface FlowState {
     scriptNodeId: string,
     scenes: Array<{ description: string; dialogue: string; duration: string; camera: string; negativePrompt?: string; aspectRatio?: string; outputMode?: string }>
   ) => void
+  createCharacterNodes: (
+    scriptNodeId: string,
+    characters: Array<{ name: string; appearance: string; role: string }>
+  ) => void
+  createScreenplayNode: (
+    scriptNodeId: string,
+    script: {
+      title: string
+      synopsis: string
+      characters: Array<{ name: string; appearance: string; role: string }>
+      scenes: Array<{ description: string; dialogue: string; duration: string; camera: string; negativePrompt?: string; aspectRatio?: string; outputMode?: string; characters?: string[] }>
+    }
+  ) => void
+  createNodesFromScreenplay: (
+    screenplayNodeId: string,
+    data: {
+      characters: Array<{ name: string; appearance: string; role: string }>
+      scenes: Array<{ description: string; dialogue: string; duration: string; camera: string; negativePrompt?: string; aspectRatio?: string; outputMode?: string; characters?: string[] }>
+    }
+  ) => void
   // material picker
   materialPickerTarget: string | null
   openMaterialPicker: (nodeId: string) => void
@@ -230,6 +250,7 @@ const emptyNodeCount: Record<NodeType, number> = {
   script: 0,
   scene: 0,
   promptAssistant: 0,
+  screenplay: 0,
 }
 
 const countNodesByType = (nodes: Node<CustomNodeData>[]) =>
@@ -336,7 +357,9 @@ const NODE_TYPE_MAP: Record<NodeType, string> = {
   audio: 'audioNode',
   script: 'scriptNode',
   scene: 'sceneNode',
+  storyboard: 'storyboardNode',
   promptAssistant: 'promptAssistantNode',
+  screenplay: 'screenplayNode',
 }
 
 const LABEL_MAP: Record<NodeType, string> = {
@@ -344,9 +367,11 @@ const LABEL_MAP: Record<NodeType, string> = {
   image: 'AI 生图',
   video: 'AI 视频',
   audio: '音频节点',
-  script: '分镜脚本',
+  script: 'AI 编剧',
   scene: '分镜',
+  storyboard: '分镜表',
   promptAssistant: '提示词助手',
+  screenplay: '剧本',
 }
 
 export const useFlowStore = create<FlowState>()(
@@ -598,6 +623,131 @@ export const useFlowStore = create<FlowState>()(
           newEdges.push(buildEdge(scriptNodeId, nodeId, get().edgeStyleType))
         })
         nodeCount.scene = (nodeCount.scene ?? 0) + scenes.length
+        set({
+          nodes: [...get().nodes, ...newNodes],
+          edges: [...get().edges, ...newEdges],
+          nodeCount,
+        })
+      },
+
+      createCharacterNodes: (scriptNodeId, characters) => {
+        get()._pushUndo()
+        const scriptNode = get().nodes.find((n) => n.id === scriptNodeId)
+        if (!scriptNode) return
+        const nodeCount = { ...get().nodeCount }
+        const newNodes: Node<CustomNodeData>[] = []
+        const newEdges: Edge[] = []
+        const ts = Date.now()
+        const spacing = 320
+        const baseX = scriptNode.position.x - ((characters.length - 1) * spacing) / 2
+        const baseY = scriptNode.position.y - 340
+
+        characters.forEach((char, i) => {
+          const nodeId = `image-char-${ts}-${i}`
+          const threeViewPrompt = `角色设计参考图：${char.name}\n${char.appearance}\n三视图(character turnaround sheet)，白色纯净背景，全身像\n正面视角(front view) + 侧面视角(side view) + 背面视角(back view)\n统一角色设计，一致的服装和比例\ncharacter concept art, white background, full body, consistent design, high quality, detailed`
+          newNodes.push({
+            id: nodeId,
+            type: NODE_TYPE_MAP.image,
+            position: { x: baseX + i * spacing, y: baseY },
+            data: {
+              label: `角色：${char.name}`,
+              type: 'image',
+              status: 'idle',
+              content: threeViewPrompt,
+              meta: char.role,
+            },
+          })
+          newEdges.push(buildEdge(scriptNodeId, nodeId, get().edgeStyleType))
+        })
+        nodeCount.image = (nodeCount.image ?? 0) + characters.length
+        set({
+          nodes: [...get().nodes, ...newNodes],
+          edges: [...get().edges, ...newEdges],
+          nodeCount,
+        })
+      },
+
+      createScreenplayNode: (scriptNodeId, script) => {
+        get()._pushUndo()
+        const scriptNode = get().nodes.find((n) => n.id === scriptNodeId)
+        if (!scriptNode) return
+        const nodeCount = { ...get().nodeCount }
+        const ts = Date.now()
+        const nodeId = `screenplay-${ts}`
+        const count = (nodeCount.screenplay ?? 0) + 1
+
+        const newNode: Node<CustomNodeData> = {
+          id: nodeId,
+          type: NODE_TYPE_MAP.screenplay,
+          position: { x: scriptNode.position.x + 420, y: scriptNode.position.y },
+          data: {
+            label: `剧本：${script.title}`,
+            type: 'screenplay',
+            status: 'ready',
+            content: JSON.stringify(script),
+          },
+        }
+        const newEdge = buildEdge(scriptNodeId, nodeId, get().edgeStyleType)
+        nodeCount.screenplay = count
+        set({
+          nodes: [...get().nodes, newNode],
+          edges: [...get().edges, newEdge],
+          nodeCount,
+        })
+      },
+
+      createNodesFromScreenplay: (screenplayNodeId, data) => {
+        get()._pushUndo()
+        const spNode = get().nodes.find((n) => n.id === screenplayNodeId)
+        if (!spNode) return
+        const nodeCount = { ...get().nodeCount }
+        const newNodes: Node<CustomNodeData>[] = []
+        const newEdges: Edge[] = []
+        const ts = Date.now()
+        const sx = spNode.position.x
+        const sy = spNode.position.y
+
+        // Character image nodes — above the screenplay node
+        const charSpacing = 320
+        const charBaseX = sx - ((data.characters.length - 1) * charSpacing) / 2
+        const charBaseY = sy - 380
+        data.characters.forEach((char, i) => {
+          const nodeId = `image-char-${ts}-${i}`
+          const threeViewPrompt = `角色设计参考图：${char.name}\n${char.appearance}\n三视图(character turnaround sheet)，白色纯净背景，全身像\n正面视角(front view) + 侧面视角(side view) + 背面视角(back view)\n统一角色设计，一致的服装和比例\ncharacter concept art, white background, full body, consistent design, high quality, detailed`
+          newNodes.push({
+            id: nodeId,
+            type: NODE_TYPE_MAP.image,
+            position: { x: charBaseX + i * charSpacing, y: charBaseY },
+            data: {
+              label: `角色：${char.name}`,
+              type: 'image',
+              status: 'idle',
+              content: threeViewPrompt,
+              meta: char.role,
+            },
+          })
+          newEdges.push(buildEdge(screenplayNodeId, nodeId, get().edgeStyleType))
+        })
+        nodeCount.image = (nodeCount.image ?? 0) + data.characters.length
+
+        // Storyboard table node — to the right of screenplay
+        const sbId = `storyboard-${ts}`
+        const sbCount = (nodeCount.storyboard ?? 0) + 1
+        const rows = data.scenes.map((scene, i) => ({ ...scene, sceneIndex: i + 1 }))
+        newNodes.push({
+          id: sbId,
+          type: NODE_TYPE_MAP.storyboard,
+          position: { x: sx + 480, y: sy },
+          data: {
+            label: `分镜表 ${sbCount}`,
+            type: 'storyboard' as NodeType,
+            status: 'ready',
+            content: JSON.stringify(rows),
+          },
+        })
+        newEdges.push(buildEdge(screenplayNodeId, sbId, get().edgeStyleType))
+        nodeCount.storyboard = sbCount
+
         set({
           nodes: [...get().nodes, ...newNodes],
           edges: [...get().edges, ...newEdges],

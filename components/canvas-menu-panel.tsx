@@ -119,7 +119,9 @@ const nodeTypeMap: Record<NodeType, string> = {
   audio: 'audioNode',
   script: 'scriptNode',
   scene: 'sceneNode',
+  storyboard: 'storyboardNode',
   promptAssistant: 'promptAssistantNode',
+  screenplay: 'screenplayNode',
 }
 
 function workflowNode(

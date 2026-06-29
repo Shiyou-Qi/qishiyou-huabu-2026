@@ -15,19 +15,21 @@ import { useConnectedPrompt } from '@/hooks/use-connected-prompt'
 import { saveToLibrary, extractVideoThumbnail } from '@/lib/save-to-library'
 
 
-type Tab = 'text2video' | 'ref' | 'firstlast' | 'extend'
+type Tab = 'prompt' | 'text2video' | 'ref' | 'firstlast' | 'extend'
 type Ratio = '21:9' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | 'auto'
 type Resolution = '480p' | '720p' | '1080p'
 type DurationMode = 'manual' | 'smart'
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'prompt',     label: '提示词' },
   { id: 'text2video', label: '文生视频' },
   { id: 'ref',        label: '全能参考' },
   { id: 'firstlast',  label: '首尾帧' },
   { id: 'extend',     label: '视频延长' },
 ]
 /** Tab → 左侧连接点 id（一一对应 NodeBase 上 inputPorts 的顺序） */
-const TAB_HANDLES: Record<Tab, (typeof VIDEO_TAB_HANDLES)[number]> = {
+const TAB_HANDLES: Record<Tab, string> = {
+  prompt:     PROMPT_HANDLE,
   text2video: 'tab-text2video',
   ref:        'tab-ref',
   firstlast:  'tab-firstlast',
@@ -212,7 +214,7 @@ function VideoResultNode({ id, data, selected }: VideoNodeProps) {
 
 // ─── Tool node ────────────────────────────────────────────────────────────────
 function VideoToolNode({ id, data, selected }: VideoNodeProps) {
-  const [tab, setTab] = useState<Tab>('text2video')
+  const [tab, setTab] = useState<Tab>('prompt')
   const [ratio, setRatio] = useState<Ratio>('16:9')
   const [resolution, setResolution] = useState<Resolution>('720p')
   const [durationMode, setDurationMode] = useState<DurationMode>('manual')
@@ -220,12 +222,11 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
   const [genCount, setGenCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
   const [inputCreated, setInputCreated] = useState<Partial<Record<Tab, boolean>>>({})
-  const [refCount, setRefCount] = useState(0)
+  const refCount = useFlowStore((s) => s.edges.filter((e) => e.target === id && e.targetHandle === TAB_HANDLES.ref).length)
   const [prompt, setPrompt] = useState<string>('')
   const [isOptimizing, setIsOptimizing] = useState(false)
   const connectedPrompt = useConnectedPrompt(id)
   const effectivePrompt = connectedPrompt ? connectedPrompt.text : prompt
-  const promptRef = useRef<HTMLDivElement>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
   const mentionDropRef = useRef<HTMLDivElement>(null)
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -370,13 +371,6 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
         const centerY = btnBox.top - wrapBox.top + btnBox.height / 2
         next[TAB_HANDLES[t.id]] = `${(centerY / wrapBox.height) * 100}%`
       })
-      // prompt handle aligned to prompt section
-      const pEl = promptRef.current
-      if (pEl) {
-        const pBox = pEl.getBoundingClientRect()
-        const pCenter = pBox.top - wrapBox.top + pBox.height / 2
-        next[PROMPT_HANDLE] = `${(pCenter / wrapBox.height) * 100}%`
-      }
       // 仅在值真正变化时 setState，避免无谓 re-render
       setPortTops((prev) => {
         const changed = Object.keys(next).some((k) => next[k] !== prev[k])
@@ -439,7 +433,6 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
 
   const handleAddRef = (refType: NodeType) => {
     if (refCount >= MAX_REF) return
-    const next = refCount + 1
     const typeLabel: Record<NodeType, string> = {
       image: '参考图',
       video: '参考视频',
@@ -447,18 +440,19 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
       text: '参考文本',
       script: '参考脚本',
       scene: '参考分镜',
+      screenplay: '参考剧本',
+      promptAssistant: '参考提示词',
     }
     addInputNode(
       id,
       refType,
       {
-        label: `${typeLabel[refType]} ${next}`,
+        label: `${typeLabel[refType] || '参考'} ${refCount + 1}`,
         status: 'idle',
         mode: 'input',
       },
       TAB_HANDLES.ref
     )
-    setRefCount(next)
   }
 
   const handleGenerate = async () => {
@@ -595,16 +589,6 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
 
   const canGenerate = !isGenerating && !!effectivePrompt.trim()
 
-  const ratioToAspect: Record<Ratio, number> = {
-    '21:9': 21 / 9,
-    '16:9': 16 / 9,
-    '4:3': 4 / 3,
-    '1:1': 1,
-    '3:4': 3 / 4,
-    '9:16': 9 / 16,
-    'auto': 16 / 9,
-  }
-
   return (
     <NodeBase
       ref={wrapperRef}
@@ -617,18 +601,17 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
       icon={<Video className="size-3.5" />}
       hasInput={false}
       inputPorts={[
+        { id: TAB_HANDLES.prompt,     label: '提示词',   top: portTops[TAB_HANDLES.prompt], color: '!bg-amber-400 !border-background !border-2' },
         { id: TAB_HANDLES.text2video, label: '文生视频', top: portTops[TAB_HANDLES.text2video] },
         { id: TAB_HANDLES.ref,        label: '全能参考', top: portTops[TAB_HANDLES.ref] },
         { id: TAB_HANDLES.firstlast,  label: '首尾帧',   top: portTops[TAB_HANDLES.firstlast] },
         { id: TAB_HANDLES.extend,     label: '视频延长', top: portTops[TAB_HANDLES.extend] },
-        { id: PROMPT_HANDLE, label: '提示词', top: portTops[PROMPT_HANDLE] ?? '75%', color: '!bg-amber-400 !border-background !border-2' },
       ]}
       width="w-[560px]"
 
     >
-      {/* 左侧 Tab 列 + 右侧两段式（提示行上方 / 视频预览下方），对齐 image 节点 */}
+      {/* 左侧 Tab 列 + 右侧提示词 */}
       <div className="-mx-3.5 mb-3 flex gap-2 px-3.5">
-        {/* 左侧 Tab 列（垂直，对齐 image 节点） */}
         <div className="flex w-[68px] shrink-0 flex-col gap-1 rounded-xl bg-muted/30 p-1">
           {TABS.map((t) => (
             <button key={t.id} ref={(el) => { if (el) tabBtnRefs.current[t.id] = el }}
@@ -640,203 +623,147 @@ function VideoToolNode({ id, data, selected }: VideoNodeProps) {
           ))}
         </div>
 
-        {/* 右侧主内容：上方提示行 / 下方视频内嵌预览 */}
-        <div className="flex flex-1 min-w-0 flex-col gap-2">
-          {/* 上：tab 对应的 hint / ref 计数 / 提示行 */}
-          <div className="flex flex-col gap-1.5">
-            {tab === 'ref' && (
-              <div className="flex items-center gap-2 rounded-lg border-2 border-border/30 bg-muted/20 px-2.5 py-1.5">
-                <span className="text-[13px] text-muted-foreground">
-                  已连接 <span className="font-semibold text-foreground">{refCount}</span> / {MAX_REF} 个参考
-                </span>
-                <div className="flex-1" />
-                {refCount < MAX_REF ? (
-                  <div className="flex gap-1">
-                    <button
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={() => handleAddRef('image')}
-                      className="flex items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[13px] font-medium text-blue-400 transition-colors hover:bg-blue-500/20"
-                    >
-                      <ImageIcon className="size-2.5" />
-                      图片
-                    </button>
-                    <button
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={() => handleAddRef('video')}
-                      className="flex items-center gap-1 rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[13px] font-medium text-violet-400 transition-colors hover:bg-violet-500/20"
-                    >
-                      <Video className="size-2.5" />
-                      视频
-                    </button>
-                    <button
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={() => handleAddRef('audio')}
-                      className="flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[13px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
-                    >
-                      <Music className="size-2.5" />
-                      音频
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[13px] text-amber-400">已达上限</span>
-                )}
-              </div>
-            )}
-            {tab === 'firstlast' && inputCreated['firstlast'] && (
-              <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
-                <div className="size-1.5 rounded-full bg-blue-400" />
-                <p className="text-[13px] leading-tight text-blue-400">首帧 / 尾帧节点已创建，请在左侧分别上传</p>
-              </div>
-            )}
-            {tab === 'extend' && inputCreated['extend'] && (
-              <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
-                <div className="size-1.5 rounded-full bg-blue-400" />
-                <p className="text-[13px] leading-tight text-blue-400">源视频节点已创建，请在左侧上传要延长的视频</p>
-              </div>
-            )}
-            <p className="text-[13px] leading-relaxed text-muted-foreground/70">
-              {connectedPrompt
-                ? <span className="text-amber-500/80">提示词已由外部节点提供</span>
-                : !effectivePrompt.trim()
-                  ? <span className="text-amber-400/80">待填写提示词，或连接文本节点</span>
-                  : '提示词直接在本卡片中编辑'
-              }
-            </p>
-          </div>
-
-          {/* 下：内嵌视频预览 —— AI 结果缩略图（与 image 内嵌预览对齐；生成完仍自动外抛 result 节点） */}
-          <div
-            className="relative overflow-hidden rounded-xl border-2 border-border/30 bg-muted/30"
-            style={{ aspectRatio: ratioToAspect[ratio], maxHeight: 220 }}
-          >
-            {data.videoUrl ? (
-              <VideoPlayer
-                src={data.videoUrl as string}
-                className="size-full"
-                downloadName={`${data.label || 'video'}.mp4`}
-              />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2">
-                {data.status === 'generating' || isGenerating ? (
-                  <>
-                    <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground" />
-                    <p className="text-[14px] text-muted-foreground/60">正在生成 {durationMode === 'smart' ? '智能时长' : `${duration}s`}…</p>
-                  </>
-                ) : (
-                  <>
-                    <Play className="size-7 text-muted-foreground/20 ml-0.5" />
-                    <p className="text-[14px] text-muted-foreground/50">生成结果将显示在这里</p>
-                    <p className="text-[13px] text-muted-foreground/30">完成时也会自动在右侧生成 result 节点</p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 提示词区域 — 内联编辑 / 外部节点排斥切换 */}
-      <div ref={promptRef} className="mb-3">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[13px] text-muted-foreground">提示词</span>
-          {connectedPrompt ? (
-            <span className="flex items-center gap-1 text-[13px] text-amber-500">
-              <Link2 className="size-3" />
-              来自「{connectedPrompt.label}」
-            </span>
-          ) : !prompt.trim() ? (
-            <span className="text-[13px] text-amber-400/80">待填写</span>
-          ) : null}
-        </div>
-        {connectedPrompt && (
-          <div className="mb-1.5 flex items-center justify-between rounded-md bg-amber-500/10 px-2.5 py-1.5" title="外部提示词已接入，本地输入已锁定">
-            <span className="flex items-center gap-1.5 text-[13px] font-medium text-amber-600">
-              <Link2 className="size-3" />
-              外部提示词已接入，本地输入已锁定
-            </span>
-            <button
+        <div className="flex flex-1 min-w-0 flex-col gap-1.5">
+          {tab === 'ref' && (
+            <div className="flex items-center gap-2 rounded-lg border-2 border-border/30 bg-muted/20 px-2.5 py-1.5">
+              <span className="text-[12px] text-muted-foreground">
+                已连接 <span className="font-semibold text-foreground">{refCount}</span> / {MAX_REF} 个参考
+              </span>
+              <div className="flex-1" />
+              {refCount < MAX_REF ? (
+                <div className="flex gap-1">
+                  <button
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => handleAddRef('image')}
+                    className="flex items-center gap-1 rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[12px] font-medium text-blue-400 transition-colors hover:bg-blue-500/20"
+                  >
+                    <ImageIcon className="size-2.5" />
+                    图片
+                  </button>
+                  <button
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => handleAddRef('video')}
+                    className="flex items-center gap-1 rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[12px] font-medium text-violet-400 transition-colors hover:bg-violet-500/20"
+                  >
+                    <Video className="size-2.5" />
+                    视频
+                  </button>
+                  <button
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => handleAddRef('audio')}
+                    className="flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[12px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                  >
+                    <Music className="size-2.5" />
+                    音频
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[12px] text-amber-400">已达上限</span>
+              )}
+            </div>
+          )}
+          {tab === 'firstlast' && inputCreated['firstlast'] && (
+            <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
+              <div className="size-1.5 rounded-full bg-blue-400" />
+              <p className="text-[12px] leading-tight text-blue-400">首帧 / 尾帧节点已创建，请在左侧分别上传</p>
+            </div>
+          )}
+          {tab === 'extend' && inputCreated['extend'] && (
+            <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
+              <div className="size-1.5 rounded-full bg-blue-400" />
+              <p className="text-[12px] leading-tight text-blue-400">源视频节点已创建，请在左侧上传要延长的视频</p>
+            </div>
+          )}
+          {connectedPrompt && (
+            <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-2.5 py-1" title="外部提示词已接入，本地输入已锁定">
+              <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                <Link2 className="size-3" />
+                来自「{connectedPrompt.label}」
+              </span>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setPrompt(connectedPrompt.text); connectedPrompt.disconnect() }}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Unlink className="size-2.5" />
+                断开
+              </button>
+            </div>
+          )}
+          <div className="relative flex-1">
+            <textarea
+              ref={promptTextareaRef}
+              value={connectedPrompt ? connectedPrompt.text : prompt}
+              onChange={(e) => {
+                setPrompt(e.target.value)
+                if (!connectedPrompt) detectMention(e.target.value, e.target.selectionStart)
+              }}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setPrompt(connectedPrompt.text); connectedPrompt.disconnect() }}
-              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Unlink className="size-3" />
-              断开连接
-            </button>
-          </div>
-        )}
-        <div className="relative">
-          <textarea
-            ref={promptTextareaRef}
-            value={connectedPrompt ? connectedPrompt.text : prompt}
-            onChange={(e) => {
-              setPrompt(e.target.value)
-              if (!connectedPrompt) detectMention(e.target.value, e.target.selectionStart)
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (mentionOpen && mentionItems.length > 0) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionItems.length - 1)) }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)) }
-                else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); handleMentionSelect(mentionItems[mentionIndex]) }
-                else if (e.key === 'Escape') { e.preventDefault(); setMentionOpen(false) }
-              }
-            }}
-            onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px' }}
-            disabled={!!connectedPrompt}
-            placeholder="描述你想生成的画面，输入 @ 引用已连接的参考素材…"
-            rows={4}
-            title={connectedPrompt ? '外部提示词已接入，本地输入已锁定' : undefined}
-            className={cn(
-              'w-full resize-none overflow-y-auto rounded-lg border-2 px-2.5 py-2 pb-8 text-[12.5px] leading-relaxed focus:outline-none',
-              connectedPrompt
-                ? 'cursor-not-allowed border-amber-400/30 bg-muted/40 text-foreground/50'
-                : 'border-border/30 bg-muted/20 text-foreground placeholder:text-muted-foreground/40 focus:border-primary/40'
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (mentionOpen && mentionItems.length > 0) {
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionItems.length - 1)) }
+                  else if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)) }
+                  else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); handleMentionSelect(mentionItems[mentionIndex]) }
+                  else if (e.key === 'Escape') { e.preventDefault(); setMentionOpen(false) }
+                }
+              }}
+              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px' }}
+              disabled={!!connectedPrompt}
+              placeholder="描述你想生成的画面，输入 @ 引用已连接的参考素材…"
+              rows={3}
+              title={connectedPrompt ? '外部提示词已接入，本地输入已锁定' : undefined}
+              className={cn(
+                'w-full h-full min-h-[80px] resize-none overflow-y-auto rounded-lg border-2 px-2.5 py-2 pb-7 text-[12.5px] leading-relaxed focus:outline-none',
+                connectedPrompt
+                  ? 'cursor-not-allowed border-amber-400/30 bg-muted/40 text-foreground/50'
+                  : 'border-border/30 bg-muted/20 text-foreground placeholder:text-muted-foreground/40 focus:border-primary/40'
+              )}
+            />
+            {!connectedPrompt && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); optimizePrompt() }}
+                disabled={!prompt.trim() || isOptimizing}
+                title="AI 优化提示词"
+                className="absolute right-1.5 bottom-2 z-10 text-indigo-400 transition-all hover:text-indigo-300 hover:scale-110 disabled:opacity-15 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                {isOptimizing
+                  ? <Loader2 className="size-3.5 animate-spin" />
+                  : <Sparkles className="size-3.5" />
+                }
+              </button>
             )}
-          />
-          {!connectedPrompt && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); optimizePrompt() }}
-              disabled={!prompt.trim() || isOptimizing}
-              title="AI 优化提示词"
-              className="absolute right-1.5 bottom-3 z-10 text-indigo-400 transition-all hover:text-indigo-300 hover:scale-110 disabled:opacity-15 disabled:cursor-not-allowed disabled:hover:scale-100"
+          </div>
+          {/* @mention dropdown */}
+          {mentionOpen && mentionItems.length > 0 && createPortal(
+            <div
+              ref={mentionDropRef}
+              style={{ position: 'fixed', zIndex: 99999, top: -9999, left: -9999 }}
+              className="max-h-[200px] min-w-[180px] overflow-y-auto rounded-lg border border-border/60 bg-popover/98 py-1 shadow-xl backdrop-blur-xl"
             >
-              {isOptimizing
-                ? <Loader2 className="size-3.5 animate-spin" />
-                : <Sparkles className="size-3.5" />
-              }
-            </button>
+              <div className="px-3 py-1 text-[11px] text-muted-foreground/50">插入素材引用</div>
+              {mentionItems.map((item, i) => (
+                <button
+                  key={item.id}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => handleMentionSelect(item)}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors',
+                    i === mentionIndex ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/80 hover:bg-muted/40'
+                  )}
+                >
+                  {item.type === 'image'
+                    ? <ImageIcon className="size-3.5 text-blue-400" />
+                    : <Video className="size-3.5 text-violet-400" />}
+                  <span className="truncate">@{item.label}</span>
+                  <img src={item.url} alt="" className="ml-auto size-6 rounded object-cover" />
+                </button>
+              ))}
+            </div>,
+            document.body,
           )}
         </div>
-        {/* @mention dropdown */}
-        {mentionOpen && mentionItems.length > 0 && createPortal(
-          <div
-            ref={mentionDropRef}
-            style={{ position: 'fixed', zIndex: 99999, top: -9999, left: -9999 }}
-            className="max-h-[200px] min-w-[180px] overflow-y-auto rounded-lg border border-border/60 bg-popover/98 py-1 shadow-xl backdrop-blur-xl"
-          >
-            <div className="px-3 py-1 text-[11px] text-muted-foreground/50">插入素材引用</div>
-            {mentionItems.map((item, i) => (
-              <button
-                key={item.id}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => handleMentionSelect(item)}
-                className={cn(
-                  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors',
-                  i === mentionIndex ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/80 hover:bg-muted/40'
-                )}
-              >
-                {item.type === 'image'
-                  ? <ImageIcon className="size-3.5 text-blue-400" />
-                  : <Video className="size-3.5 text-violet-400" />}
-                <span className="truncate">@{item.label}</span>
-                <img src={item.url} alt="" className="ml-auto size-6 rounded object-cover" />
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )}
       </div>
 
       {/* Options — compact chip row */}

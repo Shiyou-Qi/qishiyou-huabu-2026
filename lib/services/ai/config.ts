@@ -68,15 +68,39 @@ const ENV_KEY_MAP: Record<string, string> = {
   zhipu: 'ZHIPU_API_KEY',
 }
 
-/** 运行时内存中的覆盖配置（setConfig 写入，重启后丢失） */
+/** 运行时覆盖配置 — 优先写到磁盘 JSON，重启后自动恢复 */
 interface RuntimeOverride {
   apiKey?: string
   enabled?: boolean
-  /** 禁用的模型 ID 集合。为空/不存在表示全部启用 */
   disabledModels?: string[]
 }
 
-const runtimeOverrides = new Map<string, RuntimeOverride>()
+import * as fs from 'fs'
+import * as path from 'path'
+
+const CONFIG_FILE = path.join(process.cwd(), '.config', 'api-keys.json')
+
+function loadPersistedOverrides(): Map<string, RuntimeOverride> {
+  try {
+    const raw = fs.readFileSync(CONFIG_FILE, 'utf-8')
+    const obj = JSON.parse(raw) as Record<string, RuntimeOverride>
+    return new Map(Object.entries(obj))
+  } catch {
+    return new Map()
+  }
+}
+
+function saveOverrides(map: Map<string, RuntimeOverride>) {
+  try {
+    const dir = path.dirname(CONFIG_FILE)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(Object.fromEntries(map), null, 2), 'utf-8')
+  } catch (err) {
+    console.warn('Failed to persist API config:', err)
+  }
+}
+
+const runtimeOverrides = loadPersistedOverrides()
 
 /** 读取所有 Provider 配置（合并环境变量 > 运行时覆盖 > 默认值） */
 export function getAllConfigs(): ProviderConfig[] {
@@ -108,6 +132,7 @@ export function setConfig(
 ) {
   const existing = runtimeOverrides.get(providerId) ?? {}
   runtimeOverrides.set(providerId, { ...existing, ...patch })
+  saveOverrides(runtimeOverrides)
 }
 
 /** 获取指定模型的 Provider 配置（modelId → provider） */

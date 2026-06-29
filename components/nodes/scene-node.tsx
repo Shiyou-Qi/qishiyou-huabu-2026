@@ -1,8 +1,8 @@
 'use client'
 
-import { memo, useState, useCallback, useRef, useEffect } from 'react'
+import { memo, useState, useCallback, useRef, useEffect, useMemo, Fragment } from 'react'
 import { NodeProps, Node } from '@xyflow/react'
-import { Clapperboard, Camera, Clock, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react'
+import { Clapperboard, Camera, Clock, MessageSquare, ChevronDown, ChevronRight, Users, Timer } from 'lucide-react'
 import { CustomNodeData, useFlowStore } from '@/lib/store'
 import { NodeBase } from './node-base'
 
@@ -15,11 +15,54 @@ interface SceneData {
   negativePrompt?: string
   aspectRatio?: string
   outputMode?: string
+  characters?: string[]
+}
+
+interface TimelineSegment {
+  timeRange: string
+  text: string
 }
 
 function parseScene(content?: string): SceneData {
   if (!content) return { sceneIndex: 1, description: '', dialogue: '', duration: '3s', camera: '' }
   try { return JSON.parse(content) } catch { return { sceneIndex: 1, description: content, dialogue: '', duration: '3s', camera: '' } }
+}
+
+function parseTimeline(desc: string): TimelineSegment[] {
+  const regex = /\[(\d+s-\d+s)\]\s*/g
+  const segments: TimelineSegment[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(desc)) !== null) {
+    if (lastIndex < match.index && segments.length === 0) {
+      const pre = desc.slice(lastIndex, match.index).trim()
+      if (pre) segments.push({ timeRange: '', text: pre })
+    }
+    const timeRange = match[1]
+    const start = match.index + match[0].length
+    const nextMatch = regex.exec(desc)
+    const end = nextMatch ? nextMatch.index : desc.length
+    segments.push({ timeRange, text: desc.slice(start, end).trim() })
+    if (nextMatch) {
+      regex.lastIndex = nextMatch.index
+    }
+    lastIndex = end
+  }
+
+  if (segments.length === 0) return [{ timeRange: '', text: desc }]
+  return segments
+}
+
+function renderRichText(text: string) {
+  const parts = text.split(/(@\S+)/g)
+  return parts.map((part, i) =>
+    part.startsWith('@') ? (
+      <span key={i} className="inline-flex items-center rounded-md bg-blue-500/15 px-1 text-[12px] font-medium text-blue-400">{part}</span>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    )
+  )
 }
 
 type SceneNodeProps = NodeProps<Node<CustomNodeData>>
@@ -30,7 +73,11 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
   const [scene, setScene] = useState<SceneData>(() => parseScene(data.content))
   const [collapsed, setCollapsed] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
+  const [editingDesc, setEditingDesc] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const timeline = useMemo(() => parseTimeline(scene.description), [scene.description])
+  const hasTimeline = timeline.length > 1 || (timeline.length === 1 && timeline[0].timeRange)
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current
@@ -39,7 +86,7 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
     el.style.height = `${el.scrollHeight}px`
   }, [])
 
-  useEffect(() => { autoResize() }, [scene.description, collapsed, autoResize])
+  useEffect(() => { autoResize() }, [scene.description, collapsed, editingDesc, autoResize])
 
   const persist = useCallback((next: SceneData) => {
     setScene(next)
@@ -64,8 +111,20 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
           {scene.sceneIndex}
         </span>
       }
-      width="w-[300px]"
+      width="w-[320px]"
     >
+      {/* Character tags */}
+      {scene.characters && scene.characters.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          <Users className="size-3 text-blue-400/60" />
+          {scene.characters.map((name) => (
+            <span key={name} className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
+              @{name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Collapsed preview */}
       {collapsed && hasContent ? (
         <div
@@ -73,7 +132,23 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
           onClick={() => setCollapsed(false)}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <p className="line-clamp-2 text-[13px] leading-relaxed text-foreground/80">{scene.description}</p>
+          {hasTimeline ? (
+            <div className="space-y-1">
+              {timeline.slice(0, 2).map((seg, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  {seg.timeRange && (
+                    <span className="mt-0.5 shrink-0 rounded bg-violet-500/15 px-1 py-0.5 text-[9px] font-mono font-medium text-violet-400">{seg.timeRange}</span>
+                  )}
+                  <span className="line-clamp-1 text-[12px] text-foreground/70">{seg.text}</span>
+                </div>
+              ))}
+              {timeline.length > 2 && (
+                <span className="text-[10px] text-muted-foreground/40">+{timeline.length - 2} 个时间片段</span>
+              )}
+            </div>
+          ) : (
+            <p className="line-clamp-2 text-[13px] leading-relaxed text-foreground/80">{scene.description}</p>
+          )}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-xl bg-gradient-to-t from-muted/40 to-transparent" />
         </div>
       ) : collapsed ? (
@@ -86,19 +161,51 @@ function SceneNode({ id, data, selected }: SceneNodeProps) {
         </button>
       ) : (
         <>
-          {/* Description */}
-          <div className="nodrag nopan rounded-xl border border-border/40 bg-muted/20">
-            <textarea
-              ref={textareaRef}
-              value={scene.description}
-              onChange={(e) => { update({ description: e.target.value }); autoResize() }}
+          {/* Timeline visual / Description */}
+          {editingDesc || !hasTimeline ? (
+            <div className="nodrag nopan rounded-xl border border-border/40 bg-muted/20 transition-colors focus-within:border-primary/60 focus-within:ring-1 focus-within:ring-primary/20">
+              <textarea
+                ref={textareaRef}
+                value={scene.description}
+                onChange={(e) => { update({ description: e.target.value }); autoResize() }}
+                onBlur={() => setEditingDesc(false)}
+                onPointerDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="[0s-3s] @角色名 描述画面动作... [3s-5s] 下一个时间段..."
+                rows={1}
+                autoFocus={editingDesc}
+                className="nodrag nopan block w-full resize-none bg-transparent px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
+              />
+            </div>
+          ) : (
+            <div
+              className="nodrag nopan cursor-text rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5 transition-colors hover:border-border/60"
+              onClick={() => setEditingDesc(true)}
               onPointerDown={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              placeholder="描述这个镜头的画面..."
-              rows={1}
-              className="nodrag nopan block w-full resize-none bg-transparent px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
-            />
-          </div>
+            >
+              {/* Timeline bar */}
+              <div className="mb-2 flex items-center gap-1">
+                <Timer className="size-3 text-violet-400/60" />
+                <span className="text-[10px] font-medium text-violet-400/60">Seedance 时间轴</span>
+                <span className="ml-auto text-[9px] text-muted-foreground/30">点击编辑</span>
+              </div>
+
+              <div className="space-y-2">
+                {timeline.map((seg, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    {seg.timeRange && (
+                      <span className="mt-0.5 shrink-0 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-mono font-bold text-violet-400">
+                        {seg.timeRange}
+                      </span>
+                    )}
+                    <p className="flex-1 text-[12px] leading-relaxed text-foreground/80">
+                      {renderRichText(seg.text)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Dialogue */}
           {(scene.dialogue || editing === 'dialogue') ? (

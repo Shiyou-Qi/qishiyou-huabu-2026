@@ -127,5 +127,6 @@ export class AIError extends Error {
   ) {
     super(message)
     this.name = 'AIError'
+    Object.setPrototypeOf(this, AIError.prototype)
   }
 }

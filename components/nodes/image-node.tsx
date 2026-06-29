@@ -12,10 +12,11 @@ import { useModels } from '@/hooks/use-models'
 import { useConnectedPrompt } from '@/hooks/use-connected-prompt'
 import { saveToLibrary } from '@/lib/save-to-library'
 
-type Tab = 'text2img' | 'img2img' | 'ref'
+type Tab = 'prompt' | 'text2img' | 'img2img' | 'ref'
 type Ratio = '1:1' | '4:3' | '16:9' | '9:16' | '3:4'
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'prompt',   label: '提示词' },
   { id: 'text2img', label: '文生图' },
   { id: 'img2img',  label: '图生图' },
   { id: 'ref',      label: '参考图' },
@@ -211,7 +212,8 @@ function ImageResultNode({ id, data, selected }: ImageNodeProps) {
 }
 
 /** Tab → 左侧连接点 id */
-const TAB_HANDLES: Record<Tab, (typeof IMAGE_TAB_HANDLES)[number]> = {
+const TAB_HANDLES: Record<Tab, string> = {
+  prompt:   PROMPT_HANDLE,
   text2img: 'tab-text2img',
   img2img:  'tab-img2img',
   ref:      'tab-imgref',
@@ -219,16 +221,15 @@ const TAB_HANDLES: Record<Tab, (typeof IMAGE_TAB_HANDLES)[number]> = {
 
 // ─── Tool node: prompt + params, no upload area ───────────────────────────────
 function ImageToolNode({ id, data, selected }: ImageNodeProps) {
-  const [tab, setTab] = useState<Tab>('text2img')
+  const [tab, setTab] = useState<Tab>('prompt')
   const [ratio, setRatio] = useState<Ratio>('16:9')
   const [count, setCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [prompt, setPrompt] = useState<string>('')
+  const [prompt, setPrompt] = useState<string>((data.content as string) || '')
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [inputCreated, setInputCreated] = useState<Partial<Record<Tab, boolean>>>({})
   const connectedPrompt = useConnectedPrompt(id)
   const effectivePrompt = connectedPrompt ? connectedPrompt.text : prompt
-  const promptRef = useRef<HTMLDivElement>(null)
   // ── 模型列表（从后端动态获取）
   const { models: imageModels, loading: modelsLoading } = useModels({ type: 'image' })
   const [selectedModel, setSelectedModel] = useState<string>('')
@@ -304,12 +305,6 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
         const centerY = btnBox.top - wrapBox.top + btnBox.height / 2
         next[TAB_HANDLES[t.id]] = `${(centerY / wrapBox.height) * 100}%`
       })
-      const pEl = promptRef.current
-      if (pEl) {
-        const pBox = pEl.getBoundingClientRect()
-        const pCenter = pBox.top - wrapBox.top + pBox.height / 2
-        next[PROMPT_HANDLE] = `${(pCenter / wrapBox.height) * 100}%`
-      }
       setPortTops((prev) => {
         const changed = Object.keys(next).some((k) => next[k] !== prev[k])
         return changed ? next : prev
@@ -341,22 +336,9 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
 
   const canGenerate = !isGenerating && !!effectivePrompt.trim()
 
-  const ratioToAspect: Record<Ratio, number> = {
-    '1:1': 1,
-    '4:3': 4 / 3,
-    '3:4': 3 / 4,
-    '16:9': 16 / 9,
-    '9:16': 9 / 16,
-  }
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [previewMeta, setPreviewMeta] = useState<string>('')
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-
   const handleGenerate = async () => {
     if (!canGenerate || !selectedModel) return
     setIsGenerating(true)
-    setPreviewUrl(null)
-    setPreviewMeta('生成中...')
     updateNodeData(id, { status: 'generating' })
 
     try {
@@ -422,8 +404,6 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
       const imageUrl = data.imageUrl as string | undefined
 
       if (imageUrl) {
-        setPreviewUrl(imageUrl)
-        setPreviewMeta(`${ratio} · 已完成`)
         updateNodeData(id, { status: 'completed' })
         // 为每个生成结果创建 result 节点
         for (let i = 0; i < count; i++) {
@@ -442,8 +422,7 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
       }
     } catch (err) {
       console.error('图片生成失败:', err)
-      updateNodeData(id, { status: 'failed' })
-      setPreviewMeta(`失败: ${err instanceof Error ? err.message : '未知错误'}`)
+      updateNodeData(id, { status: 'failed', meta: err instanceof Error ? err.message : '未知错误' })
     } finally {
       setIsGenerating(false)
     }
@@ -461,15 +440,15 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
       icon={<ImageIcon className="size-3.5" />}
       hasInput={false}
       inputPorts={[
+        { id: TAB_HANDLES.prompt,   label: '提示词', top: portTops[TAB_HANDLES.prompt], color: '!bg-amber-400 !border-background !border-2' },
         { id: TAB_HANDLES.text2img, label: '文生图', top: portTops[TAB_HANDLES.text2img] },
         { id: TAB_HANDLES.img2img,  label: '图生图', top: portTops[TAB_HANDLES.img2img] },
         { id: TAB_HANDLES.ref,      label: '参考图', top: portTops[TAB_HANDLES.ref] },
-        { id: PROMPT_HANDLE, label: '提示词', top: portTops[PROMPT_HANDLE] ?? '75%', color: '!bg-amber-400 !border-background !border-2' },
       ]}
       width="w-[560px]"
 
     >
-      {/* 左侧 Tab 列 + 右侧内容 */}
+      {/* 左侧 Tab 列 + 右侧提示词 */}
       <div className="-mx-3.5 mb-3 flex gap-2 px-3.5">
         <div className="flex w-[68px] shrink-0 flex-col gap-1 rounded-xl bg-muted/30 p-1">
           {TABS.map((t) => (
@@ -482,140 +461,64 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
           ))}
         </div>
 
-        {/* 右侧主内容 */}
-        <div className="flex flex-1 min-w-0 flex-col gap-2">
-          <div className="flex flex-col gap-1.5">
-            {(tab === 'img2img' || tab === 'ref') && (
-              <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
-                <div className="size-1.5 rounded-full bg-blue-400" />
-                <p className="text-[13px] leading-tight text-blue-400">
-                  {tab === 'img2img' ? '请在左侧连接「参考图」素材节点' : '请在左侧连接「风格参考」素材节点'}
-                </p>
-              </div>
-            )}
-            {connectedPrompt ? (
-              <p className="text-[13px] leading-relaxed text-amber-500/80">提示词已由外部节点提供</p>
-            ) : !effectivePrompt.trim() && (
-              <p className="text-[13px] leading-relaxed text-amber-400/80">待填写提示词，或连接文本节点</p>
-            )}
-          </div>
-
-          {/* 内嵌预览 */}
-          <div
-            className="relative overflow-hidden rounded-xl border-2 border-border/30 bg-muted/30"
-            style={{ aspectRatio: ratioToAspect[ratio], maxHeight: 220 }}
-          >
-            {isGenerating && !previewUrl ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2">
-                <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground" />
-                <p className="text-[14px] text-muted-foreground/60">{previewMeta}</p>
-              </div>
-            ) : previewUrl ? (
-              <>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => setLightboxSrc(previewUrl)}
-                  onKeyDown={(e) => e.key === 'Enter' && setLightboxSrc(previewUrl)}
-                  className="group/img relative cursor-zoom-in size-full"
-                  title="点击放大查看"
-                >
-                  <img src={previewUrl} alt={data.label} className="size-full object-cover" />
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-200 group-hover/img:bg-black/10 group-hover/img:opacity-100">
-                    <Maximize2 className="size-5 text-white drop-shadow-md opacity-0 scale-75 transition-all delay-75 duration-200 group-hover/img:opacity-100 group-hover/img:scale-100" />
-                  </div>
-                </div>
-                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/70 px-2 py-1.5">
-                  <p className="truncate text-[13px] text-white/90">{previewMeta}</p>
-                  <button
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      const a = document.createElement('a')
-                      a.href = previewUrl!
-                      a.download = `${data.label || 'image'}.png`
-                      a.click()
-                    }}
-                    className="shrink-0 flex size-7 items-center justify-center rounded-lg bg-white/15 text-white/80 backdrop-blur-sm transition-colors hover:bg-white/30 hover:text-white"
-                    title="下载图片"
-                  >
-                    <Download className="size-3.5" />
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2">
-                <ImageIcon className="size-7 text-muted-foreground/20" />
-                <p className="text-[14px] text-muted-foreground/50">生成结果将显示在这里</p>
-                <p className="text-[13px] text-muted-foreground/30">完成时也会自动在右侧生成 result 节点</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 提示词区域 — 内联编辑 / 外部节点排斥切换 */}
-      <div ref={promptRef} className="mb-3">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[13px] text-muted-foreground">提示词</span>
-          {connectedPrompt ? (
-            <span className="flex items-center gap-1 text-[13px] text-amber-500">
-              <Link2 className="size-3" />
-              来自「{connectedPrompt.label}」
-            </span>
-          ) : !prompt.trim() ? (
-            <span className="text-[13px] text-amber-400/80">待填写</span>
-          ) : null}
-        </div>
-        {connectedPrompt && (
-          <div className="mb-1.5 flex items-center justify-between rounded-md bg-amber-500/10 px-2.5 py-1.5" title="外部提示词已接入，本地输入已锁定">
-            <span className="flex items-center gap-1.5 text-[13px] font-medium text-amber-600">
-              <Link2 className="size-3" />
-              外部提示词已接入，本地输入已锁定
-            </span>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setPrompt(connectedPrompt.text); connectedPrompt.disconnect() }}
-              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Unlink className="size-3" />
-              断开连接
-            </button>
-          </div>
-        )}
-        <div className="relative">
-          <textarea
-            value={connectedPrompt ? connectedPrompt.text : prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px' }}
-            disabled={!!connectedPrompt}
-            placeholder="描述你想生成的画面，或从左侧连接文本/提示词助手节点…"
-            rows={4}
-            title={connectedPrompt ? '外部提示词已接入，本地输入已锁定' : undefined}
-            className={cn(
-              'w-full resize-none overflow-y-auto rounded-lg border-2 px-2.5 py-2 pb-8 text-[12.5px] leading-relaxed focus:outline-none',
-              connectedPrompt
-                ? 'cursor-not-allowed border-amber-400/30 bg-muted/40 text-foreground/50'
-                : 'border-border/30 bg-muted/20 text-foreground placeholder:text-muted-foreground/40 focus:border-primary/40'
-            )}
-          />
-          {!connectedPrompt && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); optimizePrompt() }}
-              disabled={!prompt.trim() || isOptimizing}
-              title="AI 优化提示词"
-              className="absolute right-1.5 bottom-3 z-10 text-indigo-400 transition-all hover:text-indigo-300 hover:scale-110 disabled:opacity-15 disabled:cursor-not-allowed disabled:hover:scale-100"
-            >
-              {isOptimizing
-                ? <Loader2 className="size-3.5 animate-spin" />
-                : <Sparkles className="size-3.5" />
-              }
-            </button>
+        <div className="flex flex-1 min-w-0 flex-col gap-1.5">
+          {(tab === 'img2img' || tab === 'ref') && (
+            <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-2.5 py-1.5">
+              <div className="size-1.5 rounded-full bg-blue-400" />
+              <p className="text-[12px] leading-tight text-blue-400">
+                {tab === 'img2img' ? '请在左侧连接「参考图」素材节点' : '请在左侧连接「风格参考」素材节点'}
+              </p>
+            </div>
           )}
+          {connectedPrompt && (
+            <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-2.5 py-1" title="外部提示词已接入，本地输入已锁定">
+              <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                <Link2 className="size-3" />
+                来自「{connectedPrompt.label}」
+              </span>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setPrompt(connectedPrompt.text); connectedPrompt.disconnect() }}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Unlink className="size-2.5" />
+                断开
+              </button>
+            </div>
+          )}
+          <div className="relative flex-1">
+            <textarea
+              value={connectedPrompt ? connectedPrompt.text : prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px' }}
+              disabled={!!connectedPrompt}
+              placeholder="描述你想生成的画面…"
+              rows={3}
+              title={connectedPrompt ? '外部提示词已接入，本地输入已锁定' : undefined}
+              className={cn(
+                'w-full h-full min-h-[80px] resize-none overflow-y-auto rounded-lg border-2 px-2.5 py-2 pb-7 text-[12.5px] leading-relaxed focus:outline-none',
+                connectedPrompt
+                  ? 'cursor-not-allowed border-amber-400/30 bg-muted/40 text-foreground/50'
+                  : 'border-border/30 bg-muted/20 text-foreground placeholder:text-muted-foreground/40 focus:border-primary/40'
+              )}
+            />
+            {!connectedPrompt && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); optimizePrompt() }}
+                disabled={!prompt.trim() || isOptimizing}
+                title="AI 优化提示词"
+                className="absolute right-1.5 bottom-2 z-10 text-indigo-400 transition-all hover:text-indigo-300 hover:scale-110 disabled:opacity-15 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                {isOptimizing
+                  ? <Loader2 className="size-3.5 animate-spin" />
+                  : <Sparkles className="size-3.5" />
+                }
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -651,7 +554,6 @@ function ImageToolNode({ id, data, selected }: ImageNodeProps) {
             : <ArrowUp className="size-3.5 text-primary-foreground" />}
         </button>
       </div>
-      <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} alt={data.label} />
     </NodeBase>
   )
 }
